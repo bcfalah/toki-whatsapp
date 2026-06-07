@@ -32,8 +32,6 @@ export async function createEvent({ title, date, time, duration = 60, descriptio
     location: location || undefined,
     start: { dateTime: startStr, timeZone: TZ },
     end: { dateTime: endStr, timeZone: TZ },
-    attendees: [{ email: 'micakosto1@gmail.com' }],
-    guestsCanModify: false,
   };
 
   const res = await calendar.events.insert({ calendarId: CALENDAR_ID, resource: event });
