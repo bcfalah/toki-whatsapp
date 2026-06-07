@@ -23,18 +23,18 @@ app.post('/webhook', async (req, res) => {
 
   try {
     const reply = await handleMessage({ from, body, mediaUrl, mediaType });
-    await client.messages.create({
-      from: to,
-      to: from,
-      body: reply,
-    });
+    await client.messages.create({ from: to, to: from, body: reply });
   } catch (err) {
     console.error('Error handling message:', err);
-    await client.messages.create({
-      from: to,
-      to: from,
-      body: 'Hubo un error procesando tu mensaje. Intentá de nuevo.',
-    });
+    try {
+      await client.messages.create({
+        from: to,
+        to: from,
+        body: 'Hubo un error procesando tu mensaje. Intentá de nuevo.',
+      });
+    } catch (twilioErr) {
+      console.error('Error sending Twilio fallback:', twilioErr);
+    }
   }
 });
 
