@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import fetch from 'node-fetch';
 import { createEvent, listEvents, deleteEvent } from './calendar.js';
 
@@ -30,26 +30,30 @@ Fechas relativas como "mañana", "el jueves", "la semana que viene" convertílas
 Si el usuario dice solo "agenda" o "mis eventos" sin fecha, usá la fecha de hoy.
 Duraciones por defecto: 60 minutos si no se especifica.`;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-  model: 'gemini-3.1-flash-lite',
-  systemInstruction: SYSTEM_PROMPT,
-});
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function handleMessage({ from, body, mediaUrl, mediaType }) {
-  let result;
+  let contents;
 
   if (mediaUrl && mediaType && mediaType.startsWith('image/')) {
     const imageBase64 = await fetchImageAsBase64(mediaUrl);
-    result = await model.generateContent([
-      { inlineData: { data: imageBase64, mimeType: mediaType } },
-      body || 'Agendá esto por favor.',
-    ]);
+    contents = [
+      { role: 'user', parts: [
+        { inlineData: { data: imageBase64, mimeType: mediaType } },
+        { text: body || 'Agendá esto por favor.' },
+      ]},
+    ];
   } else {
-    result = await model.generateContent(body);
+    contents = [{ role: 'user', parts: [{ text: body }] }];
   }
 
-  const rawText = result.response.text().trim();
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.1-flash-lite',
+    contents,
+    config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: 1024 },
+  });
+
+  const rawText = response.text.trim();
 
   let parsed;
   try {
