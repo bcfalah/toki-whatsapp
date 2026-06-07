@@ -1,5 +1,7 @@
 import { google } from 'googleapis';
 
+const TZ = 'America/Argentina/Buenos_Aires';
+
 function getCalendarClient() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
   const auth = new google.auth.GoogleAuth({
@@ -11,17 +13,27 @@ function getCalendarClient() {
 
 const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary';
 
-export async function createEvent({ title, date, time, duration = 60, description = '' }) {
+export async function createEvent({ title, date, time, duration = 60, description = '', location = '' }) {
   const calendar = getCalendarClient();
 
-  const startDateTime = new Date(`${date}T${time || '09:00'}:00`);
-  const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
+  // Pass local datetime string without Z so Google interprets it as AR local time
+  const startStr = `${date}T${time || '09:00'}:00`;
+
+  // Calculate end time in AR local time
+  const startMs = new Date(`${startStr}-03:00`).getTime();
+  const endMs = startMs + duration * 60000;
+  const endLocal = new Date(endMs + 3 * 60 * 60 * 1000);
+  const p = n => String(n).padStart(2, '0');
+  const endStr = `${endLocal.getUTCFullYear()}-${p(endLocal.getUTCMonth() + 1)}-${p(endLocal.getUTCDate())}T${p(endLocal.getUTCHours())}:${p(endLocal.getUTCMinutes())}:00`;
 
   const event = {
     summary: title,
     description,
-    start: { dateTime: startDateTime.toISOString(), timeZone: 'America/Argentina/Buenos_Aires' },
-    end: { dateTime: endDateTime.toISOString(), timeZone: 'America/Argentina/Buenos_Aires' },
+    location: location || undefined,
+    start: { dateTime: startStr, timeZone: TZ },
+    end: { dateTime: endStr, timeZone: TZ },
+    attendees: [{ email: 'micakosto1@gmail.com' }],
+    guestsCanModify: false,
   };
 
   const res = await calendar.events.insert({ calendarId: CALENDAR_ID, resource: event });
@@ -31,8 +43,8 @@ export async function createEvent({ title, date, time, duration = 60, descriptio
 export async function listEvents(startDate, endDate) {
   const calendar = getCalendarClient();
 
-  const timeMin = new Date(`${startDate}T00:00:00`).toISOString();
-  const timeMax = new Date(`${endDate}T23:59:59`).toISOString();
+  const timeMin = new Date(`${startDate}T00:00:00-03:00`).toISOString();
+  const timeMax = new Date(`${endDate}T23:59:59-03:00`).toISOString();
 
   const res = await calendar.events.list({
     calendarId: CALENDAR_ID,
