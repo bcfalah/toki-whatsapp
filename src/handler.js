@@ -1,8 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import fetch from 'node-fetch';
 import { createEvent, listEvents, deleteEvent } from './calendar.js';
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `Sos Toki, un asistente de agenda por WhatsApp que habla en español rioplatense (vos/te/tu).
 Ayudás a gestionar el calendario del usuario de forma conversacional, rápida y amigable.
@@ -32,36 +30,26 @@ Fechas relativas como "mañana", "el jueves", "la semana que viene" convertílas
 Si el usuario dice solo "agenda" o "mis eventos" sin fecha, usá la fecha de hoy.
 Duraciones por defecto: 60 minutos si no se especifica.`;
 
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({
+  model: 'gemini-1.5-flash',
+  systemInstruction: SYSTEM_PROMPT,
+});
+
 export async function handleMessage({ from, body, mediaUrl, mediaType }) {
-  const messages = [];
+  let result;
 
   if (mediaUrl && mediaType && mediaType.startsWith('image/')) {
-    const imageBuffer = await fetchImageAsBase64(mediaUrl);
-    messages.push({
-      role: 'user',
-      content: [
-        {
-          type: 'image',
-          source: { type: 'base64', media_type: mediaType, data: imageBuffer },
-        },
-        {
-          type: 'text',
-          text: body || 'Agendá esto por favor.',
-        },
-      ],
-    });
+    const imageBase64 = await fetchImageAsBase64(mediaUrl);
+    result = await model.generateContent([
+      { inlineData: { data: imageBase64, mimeType: mediaType } },
+      body || 'Agendá esto por favor.',
+    ]);
   } else {
-    messages.push({ role: 'user', content: body });
+    result = await model.generateContent(body);
   }
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages,
-  });
-
-  const rawText = response.content[0].text.trim();
+  const rawText = result.response.text().trim();
 
   let parsed;
   try {
