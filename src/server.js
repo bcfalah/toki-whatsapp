@@ -38,5 +38,8 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+console.log('GEMINI_API_KEY set:', !!process.env.GEMINI_API_KEY, '| length:', process.env.GEMINI_API_KEY?.length);
+console.log('TWILIO_ACCOUNT_SID set:', !!process.env.TWILIO_ACCOUNT_SID);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
