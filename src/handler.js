@@ -33,6 +33,9 @@ Duraciones por defecto: 60 minutos si no se especifica.`;
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function handleMessage({ from, body, mediaUrl, mediaType }) {
+  const isRW = /^RW\s/i.test(body);
+  const cleanBody = isRW ? body.slice(2).trim() : body;
+
   let contents;
 
   if (mediaUrl && mediaType && mediaType.startsWith('image/')) {
@@ -40,11 +43,11 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
     contents = [
       { role: 'user', parts: [
         { inlineData: { data: imageBase64, mimeType: mediaType } },
-        { text: body || 'Agendá esto por favor.' },
+        { text: cleanBody || 'Agendá esto por favor.' },
       ]},
     ];
   } else {
-    contents = [{ role: 'user', parts: [{ text: body }] }];
+    contents = [{ role: 'user', parts: [{ text: cleanBody }] }];
   }
 
   const response = await ai.models.generateContent({
@@ -65,7 +68,7 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
 
   switch (parsed.action) {
     case 'create': {
-      const event = await createEvent(parsed);
+      const event = await createEvent({ ...parsed, isRW });
       return `Evento creado\n\n*${event.summary}*\n${formatDate(event.start.dateTime)}\nLink: ${event.htmlLink}`;
     }
     case 'list': {

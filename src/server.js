@@ -1,6 +1,7 @@
 import express from 'express';
 import twilio from 'twilio';
 import { handleMessage } from './handler.js';
+import { checkAndSendReminders } from './reminders.js';
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -42,4 +43,11 @@ console.log('GEMINI_API_KEY set:', !!process.env.GEMINI_API_KEY, '| length:', pr
 console.log('TWILIO_ACCOUNT_SID set:', !!process.env.TWILIO_ACCOUNT_SID);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  // Check RW reminders every 5 minutes
+  setInterval(async () => {
+    try { await checkAndSendReminders(); }
+    catch (err) { console.error('Reminder check error:', err.message); }
+  }, 5 * 60 * 1000);
+});
