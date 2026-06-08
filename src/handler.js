@@ -2,15 +2,19 @@ import { GoogleGenAI } from '@google/genai';
 import fetch from 'node-fetch';
 import { createEvent, listEvents, deleteEvent } from './calendar.js';
 
-const SYSTEM_PROMPT = `Sos Toki, un asistente de agenda por WhatsApp que habla en español rioplatense (vos/te/tu).
+const AR = { timeZone: 'America/Argentina/Buenos_Aires' };
+
+function buildSystemPrompt() {
+  const now = new Date();
+  return `Sos Toki, un asistente de agenda por WhatsApp que habla en español rioplatense (vos/te/tu).
 Ayudás a gestionar el calendario del usuario de forma conversacional, rápida y amigable.
-Hoy es: ${new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
-Hora actual: ${new Date().toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit' })}.
+Hoy es: ${now.toLocaleDateString('es-AR', { ...AR, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+Hora actual: ${now.toLocaleTimeString('es-AR', { ...AR, hour: '2-digit', minute: '2-digit' })}.
 
 Cuando el usuario quiera agendar, ver o borrar eventos, respondé SIEMPRE con un JSON en este formato exacto (sin texto extra):
 
 Para crear evento:
-{"action":"create","title":"Nombre del evento","date":"YYYY-MM-DD","time":"HH:MM","duration":60,"description":"descripción opcional","location":"dirección o lugar opcional"}
+{"action":"create","title":"Nombre del evento","date":"YYYY-MM-DD","time":"HH:MM","duration":15,"description":"descripción opcional","location":"dirección o lugar opcional"}
 
 Para listar eventos:
 {"action":"list","date":"YYYY-MM-DD"}
@@ -26,9 +30,10 @@ Para responder sin acción de calendario (saludar, confirmar, aclarar algo):
 
 Si el usuario manda una imagen con info de un evento (flyer, screenshot, invitación), extraé los datos y creá el evento.
 Si falta información para crear el evento (como la fecha), pedila en el campo message usando action:reply.
-Fechas relativas como "mañana", "el jueves", "la semana que viene" convertílas a YYYY-MM-DD.
+Fechas relativas como "mañana", "el jueves", "la semana que viene", "en X minutos/horas" convertílas a fecha y hora exacta en YYYY-MM-DD y HH:MM.
 Si el usuario dice solo "agenda" o "mis eventos" sin fecha, usá la fecha de hoy.
-Duraciones por defecto: 60 minutos si no se especifica.`;
+Duraciones por defecto: 15 minutos si no se especifica.`;
+}
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -53,7 +58,7 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
   const response = await ai.models.generateContent({
     model: 'gemini-3.1-flash-lite',
     contents,
-    config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: 1024 },
+    config: { systemInstruction: buildSystemPrompt(), maxOutputTokens: 1024 },
   });
 
   const rawText = response.text.trim();
@@ -103,6 +108,7 @@ async function fetchImageAsBase64(url) {
 
 function formatDate(isoString) {
   return new Date(isoString).toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
     weekday: 'long', day: 'numeric', month: 'long',
     hour: '2-digit', minute: '2-digit',
   });
