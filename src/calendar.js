@@ -14,7 +14,8 @@ function getCalendarClient() {
 const DEFAULT_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary';
 const RW_CALENDAR_ID = process.env.RW_CALENDAR_ID;
 
-export async function createEvent({ title, date, time, duration = 15, description = '', location = '', isRW = false }) {
+export async function createEvent({ title, date, time, duration, description = '', location = '', isRW = false }) {
+  duration = (duration && duration > 0 && duration <= 480) ? duration : 15;
   const calendar = getCalendarClient();
   const calendarId = isRW ? RW_CALENDAR_ID : DEFAULT_CALENDAR_ID;
 
