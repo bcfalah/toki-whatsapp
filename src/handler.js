@@ -32,7 +32,7 @@ Si el usuario manda una imagen con info de un evento (flyer, screenshot, invitac
 Si falta información para crear el evento (como la fecha), pedila en el campo message usando action:reply.
 Fechas relativas como "mañana", "el jueves", "la semana que viene", "en X minutos/horas" convertílas a fecha y hora exacta en YYYY-MM-DD y HH:MM.
 Si el usuario dice solo "agenda" o "mis eventos" sin fecha, usá la fecha de hoy.
-Duraciones: podés inferir la duración según el tipo de evento. El mínimo es 15 minutos y el máximo es 60 minutos. Si no hay info suficiente, usá 15.`;
+Duraciones: usá SIEMPRE 15 minutos. Solo usá más si el usuario dice explícitamente "X minutos" o "X horas" en su mensaje. No inferir por tipo de evento.`;
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
