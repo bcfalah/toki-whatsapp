@@ -22,7 +22,7 @@ export async function createEvent({ title, date, time, duration, description = '
   const startStr = `${date}T${time || '09:00'}:00`;
   const startMs = new Date(`${startStr}-03:00`).getTime();
   const endMs = startMs + duration * 60000;
-  const endLocal = new Date(endMs + 3 * 60 * 60 * 1000);
+  const endLocal = new Date(endMs - 3 * 60 * 60 * 1000);
   const p = n => String(n).padStart(2, '0');
   const endStr = `${endLocal.getUTCFullYear()}-${p(endLocal.getUTCMonth() + 1)}-${p(endLocal.getUTCDate())}T${p(endLocal.getUTCHours())}:${p(endLocal.getUTCMinutes())}:00`;
 
