@@ -15,7 +15,7 @@ const DEFAULT_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary';
 const RW_CALENDAR_ID = process.env.RW_CALENDAR_ID;
 
 export async function createEvent({ title, date, time, duration, description = '', location = '', isRW = false }) {
-  duration = (duration && duration > 0 && duration <= 480) ? duration : 15;
+  duration = Math.max(15, Math.min(duration || 15, 60));
   const calendar = getCalendarClient();
   const calendarId = isRW ? RW_CALENDAR_ID : DEFAULT_CALENDAR_ID;
 
@@ -26,9 +26,7 @@ export async function createEvent({ title, date, time, duration, description = '
   const p = n => String(n).padStart(2, '0');
   const endStr = `${endLocal.getUTCFullYear()}-${p(endLocal.getUTCMonth() + 1)}-${p(endLocal.getUTCDate())}T${p(endLocal.getUTCHours())}:${p(endLocal.getUTCMinutes())}:00`;
 
-  const reminders = isRW
-    ? { useDefault: false, overrides: [{ method: 'popup', minutes: 60 }, { method: 'email', minutes: 60 }] }
-    : { useDefault: false, overrides: [{ method: 'popup', minutes: 30 }, { method: 'email', minutes: 30 }, { method: 'popup', minutes: 1440 }, { method: 'email', minutes: 1440 }] };
+  const reminders = { useDefault: true };
 
   const event = {
     summary: title,
