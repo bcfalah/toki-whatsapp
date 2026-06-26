@@ -29,6 +29,7 @@ Para responder sin acción de calendario (saludar, confirmar, aclarar algo):
 {"action":"reply","message":"tu mensaje acá"}
 
 Si el usuario manda una imagen con info de un evento (flyer, screenshot, invitación), extraé los datos y creá el evento.
+Si el usuario manda una nota de voz, transcribí lo que dice y si menciona algo para agendar, creá el evento.
 Si falta información para crear el evento (como la fecha), pedila en el campo message usando action:reply.
 Fechas relativas como "mañana", "el jueves", "la semana que viene", "en X minutos/horas" convertílas a fecha y hora exacta en YYYY-MM-DD y HH:MM.
 Si el usuario dice solo "agenda" o "mis eventos" sin fecha, usá la fecha de hoy.
@@ -44,11 +45,20 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
   let contents;
 
   if (mediaUrl && mediaType && mediaType.startsWith('image/')) {
-    const imageBase64 = await fetchImageAsBase64(mediaUrl);
+    const mediaBase64 = await fetchMediaAsBase64(mediaUrl);
     contents = [
       { role: 'user', parts: [
-        { inlineData: { data: imageBase64, mimeType: mediaType } },
+        { inlineData: { data: mediaBase64, mimeType: mediaType } },
         { text: cleanBody || 'Agendá esto por favor.' },
+      ]},
+    ];
+  } else if (mediaUrl && mediaType && mediaType.startsWith('audio/')) {
+    const mediaBase64 = await fetchMediaAsBase64(mediaUrl);
+    const mimeType = mediaType.split(';')[0].trim(); // strip codec params (e.g. audio/ogg; codecs=opus)
+    contents = [
+      { role: 'user', parts: [
+        { inlineData: { data: mediaBase64, mimeType } },
+        { text: cleanBody || 'Transcribí este audio. Si menciona un evento o tarea para agendar, creálo.' },
       ]},
     ];
   } else {
@@ -95,7 +105,7 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
   }
 }
 
-async function fetchImageAsBase64(url) {
+async function fetchMediaAsBase64(url) {
   const authHeader = Buffer.from(
     `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
   ).toString('base64');
