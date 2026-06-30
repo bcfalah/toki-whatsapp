@@ -84,3 +84,28 @@ export async function deleteEvent(eventId) {
   const calendar = getCalendarClient();
   await calendar.events.delete({ calendarId: DEFAULT_CALENDAR_ID, eventId });
 }
+
+export async function listConflicts(startMs, endMs) {
+  const calendar = getCalendarClient();
+  const calListRes = await calendar.calendarList.list();
+  const calendars = calListRes.data.items || [];
+
+  const timeMin = new Date(startMs).toISOString();
+  const timeMax = new Date(endMs).toISOString();
+
+  const results = await Promise.allSettled(
+    calendars.map(cal =>
+      calendar.events.list({
+        calendarId: cal.id,
+        timeMin, timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
+      }).then(res => (res.data.items || []).map(e => ({ ...e, _calendarName: cal.summary })))
+    )
+  );
+
+  return results
+    .filter(r => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+    .filter(e => e.status !== 'cancelled');
+}

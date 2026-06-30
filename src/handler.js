@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import fetch from 'node-fetch';
-import { createEvent, listEvents, deleteEvent } from './calendar.js';
+import { createEvent, listEvents, deleteEvent, listConflicts } from './calendar.js';
 
 const AR = { timeZone: 'America/Argentina/Buenos_Aires' };
 
@@ -14,7 +14,9 @@ Hora actual: ${now.toLocaleTimeString('es-AR', { ...AR, hour: '2-digit', minute:
 Cuando el usuario quiera agendar, ver o borrar eventos, respondé SIEMPRE con un JSON en este formato exacto (sin texto extra):
 
 Para crear evento:
-{"action":"create","title":"Nombre del evento","date":"YYYY-MM-DD","time":"HH:MM","duration":15,"description":"descripción opcional","location":"dirección o lugar opcional"}
+{"action":"create","title":"Nombre del evento","date":"YYYY-MM-DD","time":"HH:MM","duration":15,"description":"descripción opcional","location":"dirección o lugar opcional","override":false}
+
+Si el usuario confirma que quiere crear el evento a pesar de un conflicto de horario, usá "override":true.
 
 Para listar eventos:
 {"action":"list","date":"YYYY-MM-DD"}
@@ -83,6 +85,21 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
 
   switch (parsed.action) {
     case 'create': {
+      if (!parsed.override) {
+        const duration = Math.max(15, Math.min(parsed.duration || 15, 480));
+        const startMs = new Date(`${parsed.date}T${parsed.time || '09:00'}:00-03:00`).getTime();
+        const endMs = startMs + duration * 60000;
+        const conflicts = await listConflicts(startMs, endMs);
+        if (conflicts.length > 0) {
+          const lines = conflicts.map(e => {
+            const time = e.start.dateTime
+              ? new Date(e.start.dateTime).toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit' })
+              : 'todo el día';
+            return `• *${e.summary}* (${e._calendarName}) — ${time}`;
+          }).join('\n');
+          return `⚠️ *Conflicto de horario*\n\nYa tenés algo en ese momento:\n${lines}\n\n¿Querés agendarlo igual?`;
+        }
+      }
       const event = await createEvent({ ...parsed, isRW });
       return `Evento creado\n\n*${event.summary}*\n${formatDate(event.start.dateTime)}\nLink: ${event.htmlLink}`;
     }
