@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import fetch from 'node-fetch';
 import { createEvent, listEvents, deleteEvent, listConflicts } from './calendar.js';
+import { checkJewishRestriction } from './jewish.js';
 
 const AR = { timeZone: 'America/Argentina/Buenos_Aires' };
 
@@ -16,7 +17,7 @@ Cuando el usuario quiera agendar, ver o borrar eventos, respondé SIEMPRE con un
 Para crear evento:
 {"action":"create","title":"Nombre del evento","date":"YYYY-MM-DD","time":"HH:MM","duration":15,"description":"descripción opcional","location":"dirección o lugar opcional","override":false}
 
-Si el usuario confirma que quiere crear el evento a pesar de un conflicto de horario, usá "override":true.
+Si el usuario confirma que quiere crear el evento a pesar de un conflicto de horario o de que cae en Shabat/Iom Tov, usá "override":true.
 
 Para listar eventos:
 {"action":"list","date":"YYYY-MM-DD"}
@@ -89,6 +90,15 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
         const duration = Math.max(15, Math.min(parsed.duration || 15, 480));
         const startMs = new Date(`${parsed.date}T${parsed.time || '09:00'}:00-03:00`).getTime();
         const endMs = startMs + duration * 60000;
+
+        // Chequeo de Shabat / Iom Tov
+        const jewish = await checkJewishRestriction(parsed.date, parsed.time);
+        if (jewish) {
+          const emoji = jewish.type === 'shabat' ? '🕯️' : '✡️';
+          return `${emoji} *${jewish.name}*\n\nEse horario cae durante ${jewish.name}. ¿Querés agendarlo igual?`;
+        }
+
+        // Chequeo de conflictos
         const conflicts = await listConflicts(startMs, endMs);
         if (conflicts.length > 0) {
           const lines = conflicts.map(e => {
