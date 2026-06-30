@@ -13,6 +13,10 @@ function getCalendarClient() {
 
 const DEFAULT_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary';
 const RW_CALENDAR_ID = process.env.RW_CALENDAR_ID;
+// Calendarios adicionales para chequeo de conflictos (IDs separados por coma en EXTRA_CALENDAR_IDS)
+const EXTRA_CALENDAR_IDS = process.env.EXTRA_CALENDAR_IDS
+  ? process.env.EXTRA_CALENDAR_IDS.split(',').map(s => s.trim()).filter(Boolean)
+  : [];
 
 export async function createEvent({ title, date, time, duration, description = '', location = '', isRW = false }) {
   duration = Math.max(15, Math.min(duration || 15, 480));
@@ -87,20 +91,35 @@ export async function deleteEvent(eventId) {
 
 export async function listConflicts(startMs, endMs) {
   const calendar = getCalendarClient();
-  const calListRes = await calendar.calendarList.list();
-  const calendars = calListRes.data.items || [];
-
   const timeMin = new Date(startMs).toISOString();
   const timeMax = new Date(endMs).toISOString();
 
+  // Siempre incluir los calendarios propios del bot + los extras configurados
+  const ownIds = [
+    { id: DEFAULT_CALENDAR_ID, name: 'Principal' },
+    ...(RW_CALENDAR_ID ? [{ id: RW_CALENDAR_ID, name: 'RW' }] : []),
+    ...EXTRA_CALENDAR_IDS.map(id => ({ id, name: id })),
+  ];
+
+  // También intentar calendarList (muestra los que el service account creó)
+  let listedCals = [];
+  try {
+    const calListRes = await calendar.calendarList.list();
+    listedCals = (calListRes.data.items || [])
+      .filter(c => !ownIds.find(o => o.id === c.id))
+      .map(c => ({ id: c.id, name: c.summary }));
+  } catch { /* ignorar */ }
+
+  const allCals = [...ownIds, ...listedCals];
+
   const results = await Promise.allSettled(
-    calendars.map(cal =>
+    allCals.map(({ id, name }) =>
       calendar.events.list({
-        calendarId: cal.id,
+        calendarId: id,
         timeMin, timeMax,
         singleEvents: true,
         orderBy: 'startTime',
-      }).then(res => (res.data.items || []).map(e => ({ ...e, _calendarName: cal.summary })))
+      }).then(res => (res.data.items || []).map(e => ({ ...e, _calendarName: name })))
     )
   );
 
