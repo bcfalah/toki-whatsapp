@@ -15,9 +15,7 @@ Hora actual: ${now.toLocaleTimeString('es-AR', { ...AR, hour: '2-digit', minute:
 Cuando el usuario quiera agendar, ver o borrar eventos, respondé SIEMPRE con un JSON en este formato exacto (sin texto extra):
 
 Para crear evento:
-{"action":"create","title":"Nombre del evento","date":"YYYY-MM-DD","time":"HH:MM","duration":15,"description":"descripción opcional","location":"dirección o lugar opcional","override":false}
-
-Si el usuario confirma que quiere crear el evento a pesar de un conflicto de horario o de que cae en Shabat/Iom Tov, usá "override":true.
+{"action":"create","title":"Nombre del evento","date":"YYYY-MM-DD","time":"HH:MM","duration":15,"description":"descripción opcional","location":"dirección o lugar opcional"}
 
 Para listar eventos:
 {"action":"list","date":"YYYY-MM-DD"}
@@ -41,9 +39,26 @@ Duraciones: usá SIEMPRE 15 minutos. Solo usá más si el usuario dice explícit
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+// Eventos pendientes de confirmación (número → datos del evento)
+const pendingEvents = new Map();
+
+function isConfirmation(text) {
+  return /^\s*(s[ií]|dale|ok|bueno|claro|ya|igual|sí igual|si igual|ok igual|bueno igual|si dale|sí dale|sí, igual|si, igual|agendalo igual|agendálo igual)\s*$/i.test(text.trim());
+}
+
 export async function handleMessage({ from, body, mediaUrl, mediaType }) {
   const isRW = /^RW\s/i.test(body);
   const cleanBody = isRW ? body.slice(2).trim() : body;
+
+  // Si hay un evento pendiente y el usuario confirma → crearlo directamente
+  if (pendingEvents.has(from) && isConfirmation(cleanBody)) {
+    const { parsed, isRW: pendingRW } = pendingEvents.get(from);
+    pendingEvents.delete(from);
+    const event = await createEvent({ ...parsed, isRW: pendingRW });
+    return `Evento creado\n\n*${event.summary}*\n${formatDate(event.start.dateTime)}\nLink: ${event.htmlLink}`;
+  }
+  // Cualquier otro mensaje cancela el pendiente
+  pendingEvents.delete(from);
 
   let contents;
 
@@ -86,7 +101,7 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
 
   switch (parsed.action) {
     case 'create': {
-      if (!parsed.override) {
+      {
         const duration = Math.max(15, Math.min(parsed.duration || 15, 480));
         const startMs = new Date(`${parsed.date}T${parsed.time || '09:00'}:00-03:00`).getTime();
         const endMs = startMs + duration * 60000;
@@ -95,6 +110,7 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
         const jewish = await checkJewishRestriction(parsed.date, parsed.time);
         if (jewish) {
           const emoji = jewish.type === 'shabat' ? '🕯️' : '✡️';
+          pendingEvents.set(from, { parsed, isRW });
           return `${emoji} *${jewish.name}*\n\nEse horario cae durante ${jewish.name}. ¿Querés agendarlo igual?`;
         }
 
@@ -107,6 +123,7 @@ export async function handleMessage({ from, body, mediaUrl, mediaType }) {
               : 'todo el día';
             return `• *${e.summary}* (${e._calendarName}) — ${time}`;
           }).join('\n');
+          pendingEvents.set(from, { parsed, isRW });
           return `⚠️ *Conflicto de horario*\n\nYa tenés algo en ese momento:\n${lines}\n\n¿Querés agendarlo igual?`;
         }
       }
